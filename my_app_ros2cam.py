@@ -1,8 +1,8 @@
-"""file_path = "/home/user/.local/share/ov/pkg/isaac-sim-2023.1.1/exts/omni.isaac.examples/omni/isaac/examples/myIsaacObjectDetection/A-Car-with-Stereo-and-IMU-for-Isaac-Sim/our_carV6.usd"
+"""file_path = "/home/user/.local/share/ov/pkg/isaac-sim-2023.1.1/exts/omni.isaac.examples/omni/isaac/examples/IsaacSim_ObjectDetection_learning/A-Car-with-Stereo-and-IMU-for-Isaac-Sim/our_carV6.usd"
 """ 
 ## 一些参数
 prim_cam_left_path = "/our_car/body/Camera_left"    # 左相机的Prim路径
-topic_name_left_image = "/rgb_left"     # 发布的左影像Topic名称
+# topic_name_left_image = "/rgb_left"     # 发布的左影像Topic名称
 # ------------------------------------------------------------
 
 # standalone模式规定代码
@@ -25,7 +25,7 @@ extensions.enable_extension("omni.isaac.ros2_bridge")
 
 # 加载环境与机器人(要在新建世界之前，不然会报错)
 from omni.isaac.core.utils.stage import open_stage
-open_stage(usd_path= "/home/user/.local/share/ov/pkg/isaac-sim-2023.1.1/exts/omni.isaac.examples/omni/isaac/examples/myIsaacObjectDetection/A-Car-with-Stereo-and-IMU-for-Isaac-Sim/our_carV6.usd")
+open_stage(usd_path= "/home/user/.local/share/ov/pkg/isaac-sim-2023.1.1/exts/omni.isaac.examples/omni/isaac/examples/IsaacSim_ObjectDetection_learning/A-Car-with-Stereo-and-IMU-for-Isaac-Sim/our_carV6.usd")
 
 # 新建世界
 from omni.isaac.core import World
@@ -34,34 +34,9 @@ world = World()
 # 构造Action Graph，发布相机数据
 import omni.graph.core as og
 keys = og.Controller.Keys
-# (ros_camera_graph, _, _, _) = og.Controller.edit(
-#     {
-#         "graph_path": "/publish_camera",    # 注意Graph的名称必须以/开头
-#         "evaluator_name": "push",
-#         "pipeline_stage": og.GraphPipelineStage.GRAPH_PIPELINE_STAGE_ONDEMAND,
-#     },
-#     {
-#         keys.CREATE_NODES: [
-#             ("OnPlaybackTick", "omni.graph.action.OnPlaybackTick"),
-#             ("createViewportLeft", "omni.isaac.core_nodes.IsaacCreateViewport"),
-#             ("setActiveCameraLeft", "omni.graph.ui.SetActiveViewportCamera"),
-#             ("cameraHelperLeft", "omni.isaac.ros_bridge.ROS1CameraHelper"),
-#         ],
-#         keys.CONNECT: [
-#             ("OnPlaybackTick.outputs:tick", "createViewportLeft.inputs:execIn"),
-#             ("createViewportLeft.outputs:viewport", "setActiveCameraLeft.inputs:execIn"),
-#             ("createViewportLeft.outputs:viewport", "cameraHelperLeft.inputs:viewport"),
-#             ("setActiveCameraLeft.outputs:execOut", "cameraHelperLeft.inputs:execIn"),
-#         ],
-#         keys.SET_VALUES: [
-#             ("createViewportLeft.inputs:viewportId", 1),
-#             ("setActiveCameraLeft.inputs:primPath", prim_cam_left_path),
 
-#             ("cameraHelperLeft.inputs:topicName", topic_name_left_image),
-#             ("cameraHelperLeft.inputs:type", "rgb"),
-#         ],
-#     },
-# )
+# ROS2 cammera action graph (modify from Iassc official example)
+
 (ros_camera_graph, _, _, _) = og.Controller.edit(
     {
         "graph_path": "/publish_camera",
@@ -108,7 +83,56 @@ keys = og.Controller.Keys
 )
 
 # 运行一次构造的Graph，生成SDGPipeline
+# Run the ROS Camera graph once to generate ROS image publishers in SDGPipeline
 og.Controller.evaluate_sync(ros_camera_graph)
+
+simulation_app.update()
+
+# Inside the SDGPipeline graph, Isaac Simulation Gate nodes are added to control the execution rate of each of the ROS image and camera info publishers.
+# By default the step input of each Isaac Simulation Gate node is set to a value of 1 to execute every frame.
+# We can change this value to N for each Isaac Simulation Gate node individually to publish every N number of frames.
+viewport_api = get_active_viewport()
+
+if viewport_api is not None:
+    import omni.syntheticdata._syntheticdata as sd
+
+    # Get name of rendervar for RGB sensor type
+    rv_rgb = omni.syntheticdata.SyntheticData.convert_sensor_type_to_rendervar(sd.SensorType.Rgb.name)
+
+    # Get path to IsaacSimulationGate node in RGB pipeline
+    rgb_camera_gate_path = omni.syntheticdata.SyntheticData._get_node_path(
+        rv_rgb + "IsaacSimulationGate", viewport_api.get_render_product_path()
+    )
+
+    # Get name of rendervar for DistanceToImagePlane sensor type
+    rv_depth = omni.syntheticdata.SyntheticData.convert_sensor_type_to_rendervar(
+        sd.SensorType.DistanceToImagePlane.name
+    )
+
+    # Get path to IsaacSimulationGate node in Depth pipeline
+    depth_camera_gate_path = omni.syntheticdata.SyntheticData._get_node_path(
+        rv_depth + "IsaacSimulationGate", viewport_api.get_render_product_path()
+    )
+
+    # Get path to IsaacSimulationGate node in CameraInfo pipeline
+    camera_info_gate_path = omni.syntheticdata.SyntheticData._get_node_path(
+        "PostProcessDispatch" + "IsaacSimulationGate", viewport_api.get_render_product_path()
+    )
+
+    # Set Rgb execution step to 5 frames
+    rgb_step_size = 5
+
+    # Set Depth execution step to 60 frames
+    depth_step_size = 60
+
+    # Set Camera info execution step to every frame
+    info_step_size = 1
+
+    # Set step input of the Isaac Simulation Gate nodes upstream of ROS publishers to control their execution rate
+    og.Controller.attribute(rgb_camera_gate_path + ".inputs:step").set(rgb_step_size)
+    og.Controller.attribute(depth_camera_gate_path + ".inputs:step").set(depth_step_size)
+    og.Controller.attribute(camera_info_gate_path + ".inputs:step").set(info_step_size)
+
 simulation_app.update()
 
 print("start to simulate")

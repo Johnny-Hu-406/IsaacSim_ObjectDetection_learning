@@ -22,6 +22,8 @@ world = World()
 # 构造Action Graph，发布相机数据
 import omni.graph.core as og
 keys = og.Controller.Keys
+
+# ROS1 cammera action graph
 (ros_camera_graph, _, _, _) = og.Controller.edit(
     {
         "graph_path": "/publish_camera",    # 注意Graph的名称必须以/开头
