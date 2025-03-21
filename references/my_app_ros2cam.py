@@ -36,7 +36,6 @@ import omni.graph.core as og
 keys = og.Controller.Keys
 
 # ROS2 cammera action graph (modify from Iassc official example)
-
 (ros_camera_graph, _, _, _) = og.Controller.edit(
     {
         "graph_path": "/publish_camera",
