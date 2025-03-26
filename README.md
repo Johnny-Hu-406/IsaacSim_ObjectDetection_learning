@@ -62,10 +62,10 @@ https://github.com/user-attachments/assets/b995aa7b-7520-4615-a35b-f873a9496640
     cd ~/.local/share/ov/pkg/isaac-sim-2023.1.1 
 
     # 使用isaac的python執行檔 執行Standalone程式
-    ./python.sh ${path_to_script}load_usd.py
+    ./python.sh ${path_to_script}/load_usd.py
     ```
 
-* 啟動Ros2 影像訂閱節點(TODO : 補充怎麼用Ros2建置pkg)
+* 啟動Ros2 影像訂閱節點 (TODO : 補充怎麼用Ros2建置pkg)
 
     ```
     cd ~/ros2_ws
